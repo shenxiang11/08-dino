@@ -3,7 +3,12 @@ use axum::{body::Body, response::Response};
 use dino_macros::{FromJs, IntoJs};
 use rquickjs::{Context, Function, Object, Promise, Runtime};
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
+use lru::LruCache;
+use tokio::sync::Mutex;
 use typed_builder::TypedBuilder;
+use crate::AppError;
 
 #[allow(unused)]
 pub struct JsWorker {
@@ -39,7 +44,7 @@ fn print(msg: String) {
 }
 
 impl JsWorker {
-    pub fn try_new(module: &str) -> Result<Self> {
+    pub fn try_new(module: String) -> Result<Self> {
         let rt = Runtime::new()?;
         let ctx = Context::full(&rt)?;
 
@@ -57,7 +62,7 @@ impl JsWorker {
         Ok(Self { rt, ctx })
     }
 
-    pub fn run(&self, name: &str, req: Req) -> anyhow::Result<Res> {
+    pub fn run(&self, name: String, req: Req) -> anyhow::Result<Res> {
         self.ctx.with(|ctx| {
             let global = ctx.globals();
             let handlers: Object = global.get("handlers")?;

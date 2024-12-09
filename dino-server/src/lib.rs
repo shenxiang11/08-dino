@@ -18,7 +18,9 @@ use indexmap::IndexMap;
 use matchit::Match;
 use middleware::ServerTimeLayer;
 use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::oneshot;
 use tracing::info;
 
 pub use config::*;
@@ -50,6 +52,7 @@ pub async fn start_server(port: u16, routers: Vec<TenentRouter>) -> Result<()> {
     for TenentRouter { host, router } in routers {
         map.insert(host, router);
     }
+
     let state = AppState::new(map);
     let app = Router::new()
         .route("/*path", any(handler))
@@ -72,17 +75,40 @@ async fn handler(
     let router = get_router_by_host(host, state)?;
     let matched = router.match_it(parts.method.clone(), parts.uri.path())?;
     let req = assemble_req(&matched, &parts, query, body)?;
-    let handler = matched.value;
     // TODO: build a worker pool, and send req via mpsc channel and get res from oneshot channel
     // but if code changed we need to recreate the worker pool
-    let worker = JsWorker::try_new(&router.code)?;
-    let res = worker.run(handler, req)?;
-    Ok(Response::from(res))
+
+    let (sender, receiver) = oneshot::channel();
+
+    let handler = matched.value.to_string();
+    let code = router.code.clone();
+    tokio::spawn(async move {
+        let worker = JsWorker::try_new(code);
+
+        if let Ok(worker) = worker {
+            let res = worker.run(handler, req);
+
+            if let Ok(res) = res {
+                if let Err(_) = sender.send(res) {
+                    info!("send res failed.");
+                }
+            }
+        }
+    });
+
+    let res = receiver.await;
+
+    match res {
+        Ok(res) => Ok(Response::from(res)),
+        Err(_) => Err(AppError::InternalError("Recv error.".to_string())),
+    }
 }
 
 impl AppState {
     pub fn new(routers: DashMap<String, SwappableAppRouter>) -> Self {
-        Self { routers }
+        Self {
+            routers,
+        }
     }
 }
 

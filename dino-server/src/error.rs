@@ -20,6 +20,9 @@ pub enum AppError {
 
     #[error("Serde json error: {0}")]
     Serde(#[from] serde_json::Error),
+
+    #[error("Internal: {0}")]
+    InternalError(String),
 }
 
 impl IntoResponse for AppError {
@@ -30,6 +33,7 @@ impl IntoResponse for AppError {
             AppError::RouteMethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             AppError::Anyhow(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Serde(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            AppError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (code, self.to_string()).into_response()

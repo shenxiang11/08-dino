@@ -10,6 +10,7 @@ axum = { version = "0.7.5", features = ["http2", "query", "tracing"] }
 dashmap = "5.5.3"
 dino-macros = { workspace = true }
 indexmap = { version = "2.2.6", features = ["serde"] }
+lru = "0.12.5"
 matchit = "0.7"
 rquickjs = { version = "0.6.2", features = ["full"] }
 serde = { workspace = true }
